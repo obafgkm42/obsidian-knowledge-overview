@@ -1,73 +1,86 @@
-# 提示詞精簡與主線連貫性：評價及實作計畫
+# Proposal: Make Generated Chapters Follow a Clear Line of Explanation
 
-日期：2026-09-11。狀態：待實作、待生成對照驗證。目標倉庫：`obafgkm42/obsidian-knowledge-overview`；分支：`codex/prompt-coherence-plan`。本文件先記錄評價與實作方向，不表示提示詞已修改。本次提交僅新增規劃文件，實作待辦均尚未開始。
+Status: proposed; implementation and generation comparison have not started.  
+Repository: `obafgkm42/obsidian-knowledge-overview`  
+Working branch: `codex/prompt-coherence-plan`  
+Review baseline: `4299505329999bc7306a76766a2c542072efb4a7`
 
-## 目標與判斷邊界
+## Purpose and recommendation
 
-讓章節圍繞明確的核心問題逐步建立理解，同時精簡重複指令，保留必要的內容範圍、雙語術語、事實邊界和可解析格式。不要以縮短提示詞本身作為成功標準，也不要靠增加固定小節或強制過渡句製造表面連貫。
+A reader should finish a chapter understanding how its ideas fit together, rather than having to assemble that relationship from a collection of individually useful sections. This proposal addresses that outcome by making the chapter's organizing question explicit and giving the model clear instructions for developing an answer. Prompt consolidation supports that change: it reduces repeated demands that currently compete with the explanation itself.
 
-以下觀察來自本次讀取的 main 分支程式碼，尚未跑新舊提示詞的生成對照。「容易造成資料拼盤」「可能分散注意力」是設計風險，並非已證實的生成結果或量化結論。實作前應重新確認分支最新內容。
+The recommended first change is deliberately contained. Reuse the existing course blueprint, the structured outline that defines each chapter's scope, to express what each chapter contributes to the reader's understanding. Rewrite the shared writing instructions around that contribution, and consolidate repeated rules without weakening the output contract. Keep domain-specific reliability rules unchanged during this first comparison. If the result is promising, simplify domain guidance in a separate change whose effects can be assessed independently.
 
-## 現況評價
+This document is a handoff for a human or another agent implementing the proposal. It explains the evidence, the intended behavior, the order of work, and the conditions for accepting the result. Repository documentation and implementation commentary should be written in English. Chinese text may remain in automated test material where it exercises language-specific behavior.
 
-| 位置 | 已確認的設計 | 問題與方向 |
-| --- | --- | --- |
-| `src/prompts.ts`：章節提示詞 | 要求自然段、標題形成學習順序、先定義非前置概念 | 有局部順序要求，但缺少整章核心問題及各節如何推進主線的明確要求 |
-| `src/prompts.ts`：術語與自查 | 首次附英文、不能只放末尾表、至少五個表格術語進正文等多次重述 | 合併成一處完整契約，自查只提醒關鍵失敗點 |
-| `src/prompts.ts`：標題與問題區 | 標題數量、層級、問題依據在正文規則和自查重複 | 保留解析必要的規格，減少逐條再說一次 |
-| `src/domainAdapters.ts` | 教學角色、單元欄位、例子要求有語意重疊；混合類型以字串完全相等去重 | 每種要求指定單一歸屬；附加類型只補充有用差異 |
-| `src/domainAdapters.ts`：可靠性規則 | 數學類帶入定價機率等提醒，實證類帶入多條實驗設計細節 | 保留一般有效性邊界；專門提醒只在主題相關時注入 |
-| `src/plugin.ts`、`src/prompts.ts` | 各章獨立生成，提示詞只序列化前後章標題與 focus，沒有前章正文 | 明確用大綱建立承接關係；不能宣稱已讀過前章實際內容 |
-| `src/prompts.ts` | 禁止重複前後章內容 | 區分簡短必要回扣與完整重新教學，避免阻斷概念銜接 |
-| `src/chapterQuality.ts` | 本地檢查主要看字數、標題、問題錨點和術語表結構 | 這些檢查無法證明語意連貫，不宜增加關鍵詞計數來假裝衡量主線 |
-| `tests/eval/CODEX_REVIEW_SCHEMA.md` | 已有概念順序、一致性等語意評分 | 明確增加主線推進與章節銜接的判準，並提供正文證據 |
+## Why the current instructions leave a gap
 
-規則並非越少越好。雙語術語、問題必須能從正文回答、公式格式及領域事實邊界都有用途；本次應精簡重複表達，不能把這些保障一併刪除。
+The current prompt already contains useful guidance about coherence. In [src/prompts.ts](src/prompts.ts), the outline must place prerequisites before dependent material, and chapter headings must form a clear learning progression. The chapter writer is also told to prefer connected explanatory paragraphs. These instructions should be retained in substance. The missing element is an explicit relationship between the chapter's overall purpose and the work each section performs.
 
-## 擬採用的主線要求
+A prerequisite order establishes that one concept can be understood before another. It does not explain why the reader needs the second concept to answer the chapter's central question. Similarly, paragraphs can be grammatically connected while still presenting unrelated definitions, examples, and exceptions. The present prompt specifies many properties of the finished chapter, but gives less direction on how to choose and develop its explanatory path.
 
-以本章 focus（本章教什麼及其定位）為依據，確立貫穿全文的核心問題或解釋主線，並在開頭自然交代。按照理解這個問題所需的概念依賴、因果、時間或論證順序展開。每節承接前文已建立的理解，推進必要的新問題，使讀者理解接下來為何談它；不強制每節添加制式承上啟下句。
+Consider a chapter about sampling and aliasing. A chapter can cover sampling rate, the Nyquist condition, aliasing, and filtering under sensible headings while leaving the reader to infer their relationship. A more coherent explanation starts with the problem of recovering information from discrete observations, shows how different signals can produce the same samples, derives the relevant sampling constraint under stated assumptions, and then explains why filtering is needed before sampling. The same required topics remain, but each section creates the reason for the next. This is an illustrative design example, not a finding from a generated chapter reviewed in this task.
 
-例子、公式、反例及限制應服務於當前解釋，而非逐欄填表。材料適合時可以延續同一案例，但不強迫所有學科使用單一案例。可以簡短回扣前章必要概念，避免重新完整教學；不能假裝知道前章實際採用的例子或措辭。教學正文結尾自然收束核心問題，必要時指出下一章要解決的問題，不必新增固定總結小節。
+Several features of the assembled prompt make this gap worth addressing. The terminology block repeats the requirement to introduce English equivalents in the body through multiple formulations, then repeats it in the final self-check. Heading limits and review-question requirements are also restated. In [src/domainAdapters.ts](src/domainAdapters.ts), a domain adapter is a set of additional teaching instructions selected for a knowledge type. Definitions, examples, assumptions, and misconceptions can appear across its section roles, unit fields, and example requirements. Mixing adapters adds further instructions, while the current deduplication removes only identical strings. None of this proves that repetition harms a particular model, but it creates a plausible pressure to satisfy a checklist of ingredients.
 
-主線應容納材料中的分歧、不確定性和多種解釋；不得為追求整齊敘事而捏造因果、抹平爭議或強行統一結論。
+There is also a concrete limitation on chapter continuity. [src/plugin.ts](src/plugin.ts) builds each chapter request independently. Although the context object contains the blueprint, the chapter prompt renders only the neighboring chapters' titles and focus statements, not their generated prose or the complete chapter sequence. The writer therefore has enough information to position the chapter approximately, but cannot know what example or wording a previous chapter actually used. The instruction not to repeat neighboring material should allow a brief conceptual bridge without inviting fabricated references to unseen content.
 
-## 實作順序與待辦
+These are findings about the instructions and data flow. No new generation comparison has been run, and this proposal does not claim an established quality improvement, a measured token saving, or a benefit across all models.
 
-### 第一階段：建立基準並精簡共通提示詞
+## The intended writing behavior
 
-- [ ] 記錄實作起點的 commit，以及代表性英文、繁中、單一及混合知識類型的完整組裝提示詞與字元／位元組長度；不要把字元數當作 token 數。
-- [ ] 修改 `buildOutlinePrompt` 對現有 `courseGoal`、`focus` 的說明：課程目標表達整體學習問題，章節 focus 表達本章回答的問題及對課程的推進。優先沿用資料結構，不新增必填欄位。
-- [ ] 在 `buildInstructionalSystemPrompt` 放入簡短的主線優先原則，在 `buildChapterPrompt` 說明如何落實，避免兩處完整重述。
-- [ ] 將術語、格式、問題依據和範圍規則各自集中；縮短末尾自查，保留真正容易漏掉且影響解析的事項。
-- [ ] 把禁止重複前後章改成允許必要回扣、禁止完整重教；保留既有章節界線。
-- [ ] 維持現有問題區和術語區標記、問題來源錨點、雙語首次出現要求、公式語法及章節編號流程。第一階段不順便改動字數、題數或標題上限，以降低對照變因。
+The organizing question should come from the chapter's existing focus and required coverage. It may be an explanatory question, a practical goal, or an interpretive problem; it need not be written as a literal question in the output. The opening should establish what the reader is trying to understand and why it matters. Subsequent sections should make progress toward that understanding through dependencies, causes, comparisons, evidence, or procedural steps appropriate to the subject.
 
-### 第二階段：精簡領域附加規則
+This does not require every chapter to become a single argument or every section to start with a transition phrase. A survey chapter may have parallel branches under one organizing purpose. A historical chapter may distinguish several contributing causes. A literature chapter may end with competing readings. Coherence means that the relationships are intelligible, not that uncertainty disappears.
 
-- [ ] 檢查 `requiredSections`、`unitFields`、`exampleRequirements`，將同義要求合併到單一位置；通用教學要求由共通提示詞負責。
-- [ ] 調整 `mergeAdapters` 的組合方式，使次要類型補充主要類型缺少的教學需求，而非疊加另一整套欄位；不引入額外模型呼叫做語意去重。
-- [ ] 將過度專門的可靠性提醒抽離通用類型規則。先確認哪些可改寫為通用原則，確有必要保留的才依章節主題加入；若需主題判定，明確定義輸入及相關／不相關案例，避免僅靠模糊關鍵字造成誤注入。
-- [ ] 保留數學假設與有效範圍、實證推論限制、歷史事實與解釋區分、文本證據獨立性等核心保障。
+Examples, formulas, objections, and limitations should appear where they advance the explanation. A recurring example is useful when it reduces the reader's effort, but should not be mandatory. Necessary prerequisites may be recalled briefly; material outside the chapter's scope should not be taught merely to make a transition smoother. Before the review questions, the teaching body should resolve the opening problem as far as the material permits and make any remaining limits clear. This closure belongs in the explanation and does not require another fixed summary heading.
 
-### 第三階段：驗證主線品質與相容性
+The following passage captures the proposed chapter-level instruction. Its wording may be refined during implementation, but its meaning is the acceptance target:
 
-- [ ] 更新 `tests/prompts.test.ts`，移除綁死冗長舊句子的斷言；保留必要契約檢查，補充章節上下文、簡短回扣和主題規則選擇的實際組裝案例。
-- [ ] 若調整領域規則選擇，測試同類型但不同主題的正反案例，以及混合類型不重複注入；不要只斷言新增句子存在。
-- [ ] 在語意審閱契約加入主線評估，若新增評分欄位，同步確認 `tests/eval/` 中型別、讀取、輸出及報告消費端，保留舊報告的可讀性。
-- [ ] 執行 `npm test`、`npm run lint`、`npm run build`；依實際產物變更及倉庫規則處理生成檔，不為本次規劃文件升版本或發版。
-- [ ] 後續有明確的線上評測授權及請求／token 預算時，使用相同模型、設定和輸出上限比較新舊提示詞。先用小樣本，涵蓋數學或概念、程序、人文及混合類型，包含繁中與英文；跨章銜接至少審閱一組相鄰章節。
+> Organize the chapter around the central question or learning purpose expressed by its focus. Establish that purpose naturally near the beginning, then develop the required topics in an order that helps the reader answer it. Show how each section builds on, qualifies, contrasts with, or applies what has already been established. Place examples and limitations where they advance that explanation. Briefly recall necessary prerequisites without reteaching neighboring chapters or claiming knowledge of their actual prose. Bring the teaching body back to its purpose before the review questions, preserving unresolved disagreements and uncertainty where appropriate.
 
-第一階段與第二階段應分開觀察效果，避免一次修改所有條件後無法判斷來源。這份文件本身只需內容及 Markdown 檢查；尚未執行上述程式碼測試或付費評測。
+## How to express this in the existing design
 
-## 驗收條件
+The outline should carry the purpose, and the chapter prompt should explain how to develop it. In `buildOutlinePrompt`, retain the existing `courseGoal` and `focus` fields and their types. Clarify that the course goal describes the understanding the course should establish, while each chapter's focus identifies its central problem and contribution to that goal. The focus should remain concise enough to be useful when passed to neighboring chapters. Subtopics and learning objectives continue to define required coverage; a stronger focus must not silently narrow them away.
 
-主線評估需回答：讀者能否從正文辨認核心問題；每節是否增加解決該問題所需的理解；相鄰節是否存在可解釋的依賴、因果、比較或論證關係；例子是否支撐當前解釋；結尾是否回應開頭，而非又開始另一份清單。審閱需引用具體段落，不能只根據標題或過渡詞判分。
+This choice avoids a blueprint migration and keeps saved outlines usable. Older outlines and fallback chapter specifications may have only a descriptive focus. The chapter instruction must still work by deriving an organizing purpose from the title, focus, and required topics, without expanding their scope. Missing neighbors should require no invented introduction or transition. There is no need to add previous chapter prose, additional model requests, or new required metadata for this first attempt.
 
-可採用 1–5 分：1 分表示內容拼接且無清楚主線；3 分表示問題明確但部分小節仍獨立堆放；5 分表示各節持續推進理解、材料服務解釋且保留必要分歧。2、4 分為中間狀態。相鄰章還需檢查是否合理承接、避免完整重教及虛構前章細節。
+Within `buildInstructionalSystemPrompt`, state the broad writing priority briefly: build a connected explanation within the blueprint's boundaries. Put the operational guidance in `buildChapterPrompt`, close to the chapter context. The two messages should have distinct responsibilities rather than repeating the full passage.
 
-接受修改的條件是代表案例的連貫性改善，且範圍覆蓋、事實邊界、問題可回答性、術語及解析格式不退步。提示詞長度下降只作輔助證據；小樣本結果不能推廣成所有模型都有效。若未執行生成對照，應明確記錄「離線檢查通過，生成品質待驗證」。
+The rest of the shared prompt should have one clear home for each requirement. Keep bilingual introduction and the final terminology table together. Keep review-question grounding, section boundaries, and source anchors together. Keep heading and mathematical formatting constraints together. A short final self-check can direct attention to coverage, explanatory continuity, and output validity without reciting every count and prohibition again. Shortening must be done by comparing meanings, not by deleting every repeated phrase mechanically; some reinforcement may prove necessary for reliable output.
 
-## 本輪範圍
+The first implementation must preserve the following contract so that any observed difference can reasonably be attributed to organization and consolidation:
 
-維持一個大綱請求加每章一個請求的正常流程，不加入自動改寫、額外模型評審、前章全文串接或強制序列化生成。先使用現有大綱欄位改善承接；只有評測顯示資訊不足，才另議精簡課程路徑或章節承接欄位。所有實作透過分支及拉取請求（Pull Request，供審閱與合併變更）進行。
+| Area | Behavior to preserve |
+| --- | --- |
+| Coverage and density | Existing scope boundaries, chapter ranges, depth settings, length targets, example requirements, and question counts |
+| Terminology | Required first-use bilingual wording, relevant canonical terms, existing table columns and term-count requirements |
+| Review questions | Questions grounded in the teaching body, existing source anchors, and the marked question and terminology boundaries |
+| Rendering | Existing heading limits, application-supplied numbering, Obsidian formula syntax, and optional diagram behavior |
+| Execution | One outline request plus one request per chapter in a normal run, existing concurrency and resume behavior, no automatic rewriting |
+
+Domain guidance should be handled after this shared-prompt change. The immediate task there is editorial: identify which instructions add a distinct teaching requirement and which merely restate shared guidance. Preserve the current adapter interfaces initially. Do not build a semantic deduplication service or a topic classifier as part of this proposal. Specialized reliability reminders, such as experiment-design or pricing-measure cautions, deserve separate attention because they may protect against known errors. Inspect their existing regression cases before generalizing or removing them. If a general rule cannot preserve that protection, retain the specific reminder and document the remaining prompt cost.
+
+## Implementation sequence
+
+The work should proceed as three reviewable steps. Each step has a concrete result that the next one depends on; completing a task list alone is not evidence that chapter quality improved.
+
+First, establish the baseline and the review method. Record the implementation starting commit and select fixed chapter contexts from the existing evaluation material. Inspect the assembled English and Traditional Chinese prompts for a single knowledge type and a mixed type, recording lengths as characters or bytes rather than calling them tokens. Do not change the evaluation harness to persist full request bodies; follow its existing artifact and credential-handling rules. Extend the guidance in [tests/eval/CODEX_REVIEW_SCHEMA.md](tests/eval/CODEX_REVIEW_SCHEMA.md) to assess explanatory continuity within the existing `conceptSequence`, `headingUtility`, and `learningEfficiency` scores. Use existing sequence-related issue records for evidence. This makes the desired outcome reviewable without introducing a new report schema.
+
+Second, implement the shared-prompt change in `src/prompts.ts` and update the relevant tests in `tests/prompts.test.ts`. Cover a normal chapter, a first or last chapter with a missing neighbor, and a legacy or fallback specification with a descriptive focus. Tests should confirm that context and required output markers survive prompt construction. Assertions tied to long obsolete sentences should be rewritten around the requirement they protect, while exact strings required by parsers remain exact. Prompt assertions can verify that the model receives an instruction; they cannot verify that its prose follows it. Complete the repository's `npm test`, `npm run lint`, and `npm run build` checks before opening an implementation pull request, and handle generated build artifacts according to repository practice.
+
+Third, compare the shared-prompt revision with the baseline before changing adapters. If it meets the acceptance conditions below, adapter consolidation can follow as a separate commit or pull request with its own comparison. Review `src/domainAdapters.ts` alongside `src/instructionalPlanner.ts` to verify both single-type and mixed-type assembly. A secondary type must still contribute its distinctive teaching needs. If consolidation weakens those needs or a reliability safeguard, revert that portion rather than expanding the refactor to compensate.
+
+The current task revises this proposal only. It does not execute those implementation steps, change runtime prompts, or authorize a paid evaluation run.
+
+## Evaluation and decision
+
+Use the existing [evaluation workflow](tests/eval/README.md). Its smoke profile provides an initial comparison across science and humanities; inspect the selected cases and add only the missing language or mixed-type coverage needed for this change. Keep chapter contexts, model, provider settings, and output limits fixed between versions. Holding those settings fixed reduces confounding, but does not eliminate generation variability. Run planning first, review its request and token ceilings, and obtain the required live-run authorization before generating.
+
+A fixed chapter comparison isolates the writer change, but cannot establish that the revised outline instructions produce better course structure. To assess that claim, separately inspect an outline generated with the revised instructions and a pair of adjacent chapters from it. Check whether their focus statements establish a useful progression, whether necessary concepts are recalled without being retaught, and whether either chapter invents details about its neighbor. This small end-to-end check should be planned explicitly rather than folded into an unbounded full-course run.
+
+The reviewer should read the teaching body before looking at its formal completeness. Identify the central purpose, then explain what each section contributes to it. When a transition fails, cite the relevant passages and describe the missing conceptual connection. Check whether examples support the current explanation and whether the ending answers or appropriately limits the opening purpose. A high score requires these relationships in the prose; sensible headings and frequent words such as “therefore” are insufficient. Apply the same rubric to both versions and, where practical, conceal which version produced each output until the review is complete.
+
+Accept the shared-prompt change when the comparison provides concrete evidence of improved continuity in the cases that needed it, without new material failures in coverage, factual reliability, terminology, question answerability, or rendering. A previously strong case need not improve, but should not materially regress. Reduced prompt length is useful supporting information, not the deciding metric. If the result is mixed or differs only in style, report it as inconclusive and investigate the affected case before broadening the change.
+
+The implementation handoff should state what changed, which checks ran, which generated cases were reviewed, and what remains uncertain. If only offline checks have run, record “prompt construction verified; generated quality not yet validated.” Keep successful shared-prompt changes separable from later adapter edits so that a regression can be reverted without discarding the whole improvement.
